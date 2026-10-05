@@ -1,6 +1,80 @@
 <h2>Leave Requests</h2>
 
-<!-- TODO (candidate): add the "new request" form here, with validation. -->
+<section class="request-form" aria-labelledby="new-request-heading">
+  <h3 id="new-request-heading">New leave request</h3>
+  <p class="form-note">Requests must start and end within the same calendar year.</p>
+
+  <p class="form-error" role="alert" *ngIf="employeesError">{{ employeesError }}</p>
+
+  <form [formGroup]="requestForm" (ngSubmit)="submitRequest()" novalidate>
+    <div class="form-grid">
+      <label>
+        Employee
+        <select formControlName="employeeId">
+          <option [ngValue]="null">Select an employee</option>
+          <option *ngFor="let employee of employees" [ngValue]="employee.id">
+            {{ employee.name }}
+          </option>
+        </select>
+        <span class="field-error" *ngIf="shouldShowError('employeeId')">
+          Please select an employee.
+        </span>
+      </label>
+
+      <label>
+        Leave type
+        <select formControlName="type">
+          <option [ngValue]="null">Select a leave type</option>
+          <option *ngFor="let option of leaveTypes" [ngValue]="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+        <span class="field-error" *ngIf="shouldShowError('type')">
+          Please select a leave type.
+        </span>
+      </label>
+
+      <label>
+        Start date
+        <input type="date" formControlName="startDate">
+        <span class="field-error" *ngIf="shouldShowError('startDate')">
+          Please choose a start date.
+        </span>
+      </label>
+
+      <label>
+        End date
+        <input type="date" formControlName="endDate">
+        <span class="field-error" *ngIf="shouldShowError('endDate')">
+          Please choose an end date.
+        </span>
+      </label>
+    </div>
+
+    <p class="field-error" role="alert"
+       *ngIf="showDateRangeError() && requestForm.hasError('startAfterEnd')">
+      The start date must not be after the end date.
+    </p>
+    <p class="field-error" role="alert"
+       *ngIf="showDateRangeError() && requestForm.hasError('spansCalendarYears')">
+      A leave request cannot span multiple calendar years.
+    </p>
+    <p class="field-error" role="alert"
+       *ngIf="showDateRangeError() && requestForm.hasError('invalidDate')">
+      Please enter valid start and end dates.
+    </p>
+
+    <p class="days-preview" *ngIf="inclusiveDays !== null">
+      Requested days: {{ inclusiveDays }} (inclusive)
+    </p>
+    <p class="form-error" role="alert" *ngIf="formError">{{ formError }}</p>
+    <p class="form-success" role="status" *ngIf="formSuccess">{{ formSuccess }}</p>
+
+    <button type="submit" [disabled]="submitting || employees.length === 0">
+      {{ submitting ? 'Submitting…' : 'Submit request' }}
+    </button>
+  </form>
+</section>
 
 <div *ngIf="loading">Loading...</div>
 
