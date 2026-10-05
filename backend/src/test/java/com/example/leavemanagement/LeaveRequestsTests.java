@@ -1,5 +1,6 @@
 package com.example.leavemanagement;
-
+import com.example.leavemanagement.model.LeaveRequest;
+import com.example.leavemanagement.model.LeaveStatus;
 import com.example.leavemanagement.controller.LeaveRequestsController;
 import com.example.leavemanagement.dto.CreateLeaveRequestDto;
 import com.example.leavemanagement.model.Employee;
@@ -72,4 +73,39 @@ class LeaveRequestsTests {
     // TODO (candidate): add a test that proves the balance bug is fixed —
     // an employee who has already used most of the quota should NOT be able
     // to create a request that pushes them over the annual quota.
+    @Test
+    void create_ExceedsRemainingQuota_IsRejected() {
+        // Arrange: employee has an annual quota of 20 days.
+        Employee employee = new Employee();
+        employee.setName("Balance Test Employee");
+        employee.setAnnualQuota(20);
+        employees.save(employee);
+
+        // The employee has already used 18 approved vacation days.
+        LeaveRequest approvedRequest = new LeaveRequest();
+        approvedRequest.setEmployeeId(employee.getId());
+        approvedRequest.setType(LeaveType.VACATION);
+        approvedRequest.setStatus(LeaveStatus.APPROVED);
+        approvedRequest.setStartDate(LocalDate.of(2026, 1, 1));
+        approvedRequest.setEndDate(LocalDate.of(2026, 1, 18));
+        approvedRequest.setDays(18);
+        leaveRequests.save(approvedRequest);
+
+        long before = leaveRequests.count();
+
+        // Request 3 more days, while only 2 remain.
+        CreateLeaveRequestDto dto = new CreateLeaveRequestDto();
+        dto.setEmployeeId(employee.getId());
+        dto.setType(LeaveType.VACATION);
+        dto.setStartDate(LocalDate.of(2026, 3, 1));
+        dto.setEndDate(LocalDate.of(2026, 3, 3));
+
+        // Act
+        ResponseEntity<?> result = controller.create(dto);
+
+        // Assert: reject the request and do not save it.
+        assertEquals(400, result.getStatusCode().value());
+        assertEquals("Not enough vacation balance", result.getBody());
+        assertEquals(before, leaveRequests.count());
+    }
 }
