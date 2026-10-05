@@ -7,6 +7,7 @@ import com.example.leavemanagement.model.LeaveStatus;
 import com.example.leavemanagement.model.LeaveType;
 import com.example.leavemanagement.repository.EmployeeRepository;
 import com.example.leavemanagement.repository.LeaveRequestRepository;
+import com.example.leavemanagement.service.LeaveRequestService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.http.ResponseEntity;
@@ -23,14 +24,17 @@ public class LeaveRequestsController {
 
     private final EmployeeRepository employeeRepository;
     private final LeaveRequestRepository leaveRequestRepository;
+    private final LeaveRequestService leaveRequestService;
 
     @PersistenceContext
     private EntityManager entityManager;
 
     public LeaveRequestsController(EmployeeRepository employeeRepository,
-                                   LeaveRequestRepository leaveRequestRepository) {
+                                   LeaveRequestRepository leaveRequestRepository,
+                                   LeaveRequestService leaveRequestService) {
         this.employeeRepository = employeeRepository;
         this.leaveRequestRepository = leaveRequestRepository;
+        this.leaveRequestService = leaveRequestService;
     }
 
     // GET /api/leave-requests
@@ -61,6 +65,12 @@ public class LeaveRequestsController {
     // POST /api/leave-requests
     @PostMapping
     public ResponseEntity<?> create(@RequestBody CreateLeaveRequestDto dto) {
+        if (dto.getType() == null
+                || !LeaveRequestService.isSingleCalendarYear(dto.getStartDate(), dto.getEndDate())) {
+            return ResponseEntity.badRequest()
+                    .body("Leave requests must have valid dates within a single calendar year");
+        }
+
         Employee employee = employeeRepository.findById(dto.getEmployeeId()).orElse(null);
         if (employee == null) {
             return ResponseEntity.status(404).body("Employee not found");
@@ -69,11 +79,8 @@ public class LeaveRequestsController {
         int days = (int) ChronoUnit.DAYS.between(dto.getStartDate(), dto.getEndDate()) + 1;
 
         // How many vacation days has the employee already used this year?
-        int used = leaveRequestRepository
-                .findByEmployeeIdAndTypeAndStatus(dto.getEmployeeId(), LeaveType.VACATION, LeaveStatus.APPROVED)
-                .stream()
-                .mapToInt(LeaveRequest::getDays)
-                .sum();
+        int used = leaveRequestService.getApprovedVacationDays(
+                dto.getEmployeeId(), dto.getStartDate().getYear());
 
         // Make sure the request does not exceed the quota.
         if (dto.getType() == LeaveType.VACATION && days > (employee.getAnnualQuota() - used)) {
@@ -91,5 +98,18 @@ public class LeaveRequestsController {
         leaveRequestRepository.save(request);
 
         return ResponseEntity.ok(request);
+    }
+
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<?> approve(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(leaveRequestService.approve(id));
+        } catch (LeaveRequestService.NotFoundException e) {
+            return ResponseEntity.status(404).body(e.getMessage());
+        } catch (LeaveRequestService.ConflictException e) {
+            return ResponseEntity.status(409).body(e.getMessage());
+        } catch (LeaveRequestService.InvalidRequestException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 }
